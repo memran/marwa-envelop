@@ -1,22 +1,42 @@
 # Marwa Envelop
 
-**Transport-agnostic structured message envelope for WebSocket, Kafka, and queue systems.**  
-Built with simplicity, security, and consistency in mind — by following the KISS and DRY principles.
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/memran/marwa-envelop.svg)](https://packagist.org/packages/memran/marwa-envelop)
+[![Downloads](https://img.shields.io/packagist/dt/memran/marwa-envelop.svg)](https://packagist.org/packages/memran/marwa-envelop)
+[![License](https://img.shields.io/github/license/memran/marwa-envelop.svg)](LICENSE)
+
+**Transport-agnostic, structured message wrapper** for PHP — ideal for Kafka, WebSocket, MQTT, log pipelines, or chat protocols.
 
 ---
 
-## ✨ Features
+## 🚀 Features
 
-- ✅ Clean JSON-based message structure
-- ✅ Fluent, chainable builder with human-readable function names
-- ✅ Supports:
-  - `text`, `array`, and `file` (inline or reference) messages
-  - `senderId`, `receiverId`, `referenceId`, `traceId`
-  - HMAC-based message integrity with `addSignature()` and `checkSignature()`
-  - Message expiration via `ttlSeconds`
-- ✅ Composer PSR-4 autoloaded (lazy-loaded)
-- ✅ Designed for high-throughput, low-memory use cases
-- ❌ No encryption (by design — for simplicity and low-cost performance)
+- 📦 PSR-compliant and lazy-loaded
+- 💬 Works with strings, arrays, files, and links
+- 🔐 Optional HMAC signing with TTL expiry
+- 🔁 Compress/gzip for efficient transport
+- 🔗 Attachments and file linking
+- 🧱 Chainable message builder syntax
+- 🧪 Ready for WebSocket, Kafka, SQS, Laravel Queue, MQTT, etc.
+
+---
+
+## 📸 Screenshot
+
+> Message structure as decoded from Envelop JSON:
+
+```
+{
+  "id": "2dd0faca-499a-42de-a274-a458b12dc1cf",
+  "type": "chat.message",
+  "sender": "user:123",
+  "receiver": "user:456",
+  "body": "Hello World!",
+  "headers": {
+    "x-room": "demo"
+  },
+  "signature": "..."
+}
+```
 
 ---
 
@@ -28,105 +48,113 @@ composer require memran/marwa-envelop
 
 ---
 
-## 🚀 Quick Start
+## 🛠 Usage Example
 
-### 1. Create a message
+### ✉️ Build and Send Message
 
 ```php
 use Marwa\Envelop\EnvelopBuilder;
 
 $msg = EnvelopBuilder::start()
     ->type('chat.message')
-    ->sender('user.123')
-    ->receiver('user.456')
-    ->body(['text' => 'Hello!'])
-    ->reference('cli-msg-001')
-    ->sign($_ENV['WIRE_SECRET']) // HMAC-SHA256 signature
+    ->sender('user:123')
+    ->receiver('user:456')
+    ->header('x-room', 'demo')
+    ->body('Hello world!')
+    ->ttl(60)
+    ->sign('super-secret-key')
     ->build();
-```
 
-### 2. Encode for transport
-
-```php
-use Marwa\Envelop\Codec;
-
-$wire = Codec::encode($msg, [
-    'compression' => Codec::COMPRESSION_GZIP
-]);
-```
-
-### 3. Decode on receiving end
-
-```php
-$decoded = Codec::decode($wire, [
-    'compression' => Codec::COMPRESSION_GZIP,
-    'verifyWithSecret' => $_ENV['WIRE_SECRET'],
-    'signatureRequired' => true
-]);
-
-if ($decoded->isExpired()) {
-    // Skip or send to DLQ
-}
+// Send over Kafka, WebSocket, etc.
+$wire = $msg->toJson();
 ```
 
 ---
 
-## 🧩 File Support
+### 📬 Decode and Read Message
 
-### Inline file transfer (base64 encoded)
+```php
+use Marwa\Envelop\Envelop;
+
+$received = Envelop::fromJson($wire);
+
+if ($received->isExpired()) {
+    throw new \Exception("Message expired");
+}
+
+if (!$received->checkSignature('super-secret-key')) {
+    throw new \Exception("Invalid signature");
+}
+
+echo $received->body; // "Hello world!"
+```
+
+---
+
+### 📁 Attach File
 
 ```php
 $msg = EnvelopBuilder::start()
-    ->type('file.upload')
-    ->sender('client')
-    ->receiver('svc.storage')
-    ->attach('/path/to/file.png')
+    ->type('chat.file')
+    ->sender('u:1')
+    ->receiver('u:2')
+    ->attach('/path/to/image.jpg')
     ->build();
 ```
 
-### Reference external file (e.g., S3)
+---
+
+### 🔗 Link to Remote File
 
 ```php
 $msg = EnvelopBuilder::start()
-    ->type('file.reference')
-    ->sender('client')
-    ->receiver('svc.storage')
-    ->link('https://example.com/myfile.pdf', [
-        'fileName' => 'myfile.pdf',
-        'contentType' => 'application/pdf'
+    ->type('file.link')
+    ->sender('u:1')
+    ->receiver('u:2')
+    ->link('https://example.com/my.pdf', [
+        'name' => 'My Document',
+        'size' => '2MB'
     ])
     ->build();
 ```
 
 ---
 
-## 💬 Field Definitions
+## 🧩 Ideal Use Cases
 
-| Field         | Description                                                         |
-| ------------- | ------------------------------------------------------------------- |
-| `messageId`   | Unique UUID v4 per message (auto-generated)                         |
-| `messageType` | Type string, e.g. `chat.message`, `log.event`                       |
-| `senderId`    | Who sent this message                                               |
-| `receiverId`  | Who should receive this message                                     |
-| `referenceId` | Business-level identifier (e.g., client-side ID or conversation ID) |
-| `traceId`     | Technical request trace (e.g., from OpenTelemetry)                  |
-| `headers`     | Key-value metadata                                                  |
-| `body`        | JSON-compatible payload (array, string, etc.)                       |
-| `contentType` | Defaults to `application/json`                                      |
-| `ttlSeconds`  | Optional message expiry time                                        |
-| `replyTo`     | Message ID to reply to (for threading or correlation)               |
+- WhatsApp-style chat systems
+- Kafka or MQTT message brokers
+- WebSocket messaging with TTL
+- Distributed logging pipelines
+- Task queues with metadata (e.g. Laravel, Symfony)
 
 ---
 
-## ✅ Best Practices
+## 🔖 Stable Releases
 
-- Use `referenceId` for correlating delivery receipts, read receipts, log flows, etc.
-- Set `ttlSeconds` for ephemeral messages like `typing` or `presence`
-- Use `sign()` + `checkSignature()` to verify message integrity
-- Partition Kafka topics by `receiverId` or `referenceId` for ordered consumption
+| Version  | Notes                     |
+| -------- | ------------------------- |
+| `v1.0.0` | Initial stable release 🚀 |
 
 ---
 
-## 📄 License
+## 📝 License
 
-MIT License © [Memran](https://github.com/memran)
+MIT © [Mohammad Emran](https://github.com/memran)
+
+---
+
+## 🧠 Keywords
+
+- kafka
+- websocket
+- envelope
+- message structure
+- event-driven
+- php builder
+- logging
+- transport agnostic
+- HMAC
+- json message
+- file attachment
+- laravel queue
