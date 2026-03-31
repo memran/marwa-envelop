@@ -3,15 +3,42 @@
   "description": "Transport-agnostic message envelope with fluent builder for Kafka/WebSocket/etc.",
   "type": "library",
   "license": "MIT",
+  "keywords": [
+    "php",
+    "messaging",
+    "envelope",
+    "kafka",
+    "websocket",
+    "mqtt"
+  ],
+  "require": {
+    "php": ">=8.1"
+  },
+  "require-dev": {
+    "friendsofphp/php-cs-fixer": "^3.66",
+    "phpstan/phpstan": "^1.12",
+    "phpunit/phpunit": "^10.0"
+  },
   "autoload": {
     "psr-4": {
       "Marwa\\Envelop\\": "src/"
     }
   },
-  "require": {
-    "php": ">=8.1"
+  "autoload-dev": {
+    "psr-4": {
+      "Marwa\\Envelop\\Tests\\": "tests/"
+    }
   },
-  "require-dev": {
-    "phpunit/phpunit": "^10.0"
+  "scripts": {
+    "test": "vendor/bin/phpunit --colors=always",
+    "test:coverage": "vendor/bin/phpunit --coverage-text",
+    "analyse": "vendor/bin/phpstan analyse --memory-limit=1G --debug",
+    "lint": "vendor/bin/php-cs-fixer fix --dry-run --diff --verbose",
+    "fix": "vendor/bin/php-cs-fixer fix --verbose",
+    "ci": [
+      "@lint",
+      "@analyse",
+      "@test"
+    ]
   }
 }
