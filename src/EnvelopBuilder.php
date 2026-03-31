@@ -5,27 +5,33 @@ declare(strict_types=1);
 namespace Marwa\Envelop;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
- * Fluent builder for constructing Envelop messages
+ * Fluent builder for constructing immutable envelopes.
  */
 final class EnvelopBuilder
 {
-    // Internal properties (lazy loaded, chainable)
-    protected string $id;
-    protected string $type = '';
-    protected string $version = '1.0';
-    protected ?string $trace = null;
-    protected ?string $reference = null;
-    protected ?string $sender = null;
-    protected ?string $receiver = null;
-    protected array $headers = [];
-    protected mixed $body = null;
-    protected ?string $content = 'application/json';
-    protected ?int $ttl = null;
-    protected ?string $reply = null;
-    protected ?string $signature = null;
-    protected DateTimeImmutable $created;
+    private string $id;
+    private string $type = '';
+    private string $version = '1.0';
+    private ?string $trace = null;
+    private ?string $reference = null;
+    private ?string $sender = null;
+    private ?string $receiver = null;
+
+    /**
+     * @var array<string, string>
+     */
+    private array $headers = [];
+
+    private mixed $body = null;
+    private ?string $content = 'application/json';
+    private ?int $ttl = null;
+    private ?string $reply = null;
+    private ?string $signature = null;
+    private DateTimeImmutable $created;
 
     /**
      * Start a new message builder
@@ -36,11 +42,16 @@ final class EnvelopBuilder
     }
 
     /**
-     * Set the message type (e.g. chat.message)
+     * Set the message type, for example `chat.message`.
      */
     public function type(string $type): self
     {
+        if ($type === '') {
+            throw new InvalidArgumentException('Message type cannot be empty.');
+        }
+
         $this->type = $type;
+
         return $this;
     }
 
@@ -50,6 +61,7 @@ final class EnvelopBuilder
     public function sender(string $id): self
     {
         $this->sender = $id;
+
         return $this;
     }
 
@@ -59,6 +71,7 @@ final class EnvelopBuilder
     public function receiver(string $id): self
     {
         $this->receiver = $id;
+
         return $this;
     }
 
@@ -68,6 +81,7 @@ final class EnvelopBuilder
     public function reference(string $id): self
     {
         $this->reference = $id;
+
         return $this;
     }
 
@@ -77,6 +91,7 @@ final class EnvelopBuilder
     public function trace(string $id): self
     {
         $this->trace = $id;
+
         return $this;
     }
 
@@ -86,92 +101,125 @@ final class EnvelopBuilder
     public function reply(string $id): self
     {
         $this->reply = $id;
+
         return $this;
     }
 
     /**
-     * Add a single header
+     * Add a single header.
      */
     public function header(string $key, string $value): self
     {
+        if ($key === '') {
+            throw new InvalidArgumentException('Header name cannot be empty.');
+        }
+
         $this->headers[$key] = $value;
+
         return $this;
     }
 
     /**
-     * Set multiple headers
+     * @param array<array-key, scalar|\Stringable|null> $headers
      */
     public function headers(array $headers): self
     {
         foreach ($headers as $k => $v) {
-            $this->headers[(string)$k] = (string)$v;
+            $this->header((string) $k, (string) $v);
         }
+
         return $this;
     }
 
     /**
-     * Set the message body (string or array)
+     * Set the message body as plain text or structured array data.
+     *
+     * @param array<mixed>|string $payload
      */
     public function body(array|string $payload): self
     {
         $this->body = $payload;
         $this->content = is_array($payload) ? 'application/json' : 'text/plain';
+
         return $this;
     }
 
     /**
-     * Attach a local file (will be base64-encoded)
+     * Attach a local file. The file contents are loaded and base64 encoded.
+     *
+     * @throws RuntimeException
      */
     public function attach(string $file): self
     {
+        if ($file === '' || !is_file($file) || !is_readable($file)) {
+            throw new RuntimeException(sprintf('File is not readable: %s', $file));
+        }
+
         $bytes = file_get_contents($file);
         if ($bytes === false) {
-            throw new \RuntimeException("Failed to read file: {$file}");
+            throw new RuntimeException(sprintf('Failed to read file: %s', $file));
         }
 
         $this->body = base64_encode($bytes);
         $this->content = Util::mime($file, $bytes);
         $this->header('x-filename', basename($file));
+
         return $this;
     }
 
     /**
-     * Link to an external file (e.g. S3)
+     * Link to an external file or object storage resource.
+     *
+     * @param array<array-key, scalar|\Stringable|null> $meta
      */
     public function link(string $url, array $meta = []): self
     {
+        if ($url === '') {
+            throw new InvalidArgumentException('Linked resource URL cannot be empty.');
+        }
+
         $this->body = $url;
         $this->content = 'application/x.file.link';
         foreach ($meta as $k => $v) {
-            $this->header('x-' . strtolower($k), (string)$v);
+            $this->header('x-' . strtolower((string) $k), (string) $v);
         }
+
         return $this;
     }
 
     /**
-     * Set time-to-live in seconds
+     * Set time-to-live in seconds.
      */
     public function ttl(int $seconds): self
     {
+        if ($seconds < 0) {
+            throw new InvalidArgumentException('TTL cannot be negative.');
+        }
+
         $this->ttl = $seconds;
+
         return $this;
     }
 
     /**
-     * Sign the message using a shared secret (HMAC SHA256)
+     * Sign the current message state using HMAC SHA-256.
      */
     public function sign(string $secret): self
     {
-        $sig = hash_hmac('sha256', $this->payloadForSignature(), $secret);
-        $this->signature = $sig;
+        $this->signature = hash_hmac('sha256', $this->payloadForSignature(), $secret);
+
         return $this;
     }
 
     /**
-     * Finalize and return the Envelop object
+     * Finalize and return the immutable envelope instance.
      */
     public function build(): Envelop
     {
+        if ($this->type === '') {
+            throw new InvalidArgumentException('Message type must be set before build().');
+        }
+
         return new Envelop(
             id: $this->id,
             type: $this->type,
@@ -191,9 +239,9 @@ final class EnvelopBuilder
     }
 
     /**
-     * Internal payload string used for HMAC signing
+     * Build the canonical payload used for HMAC signing.
      */
-    protected function payloadForSignature(): string
+    private function payloadForSignature(): string
     {
         return implode('|', [
             $this->id,
@@ -204,13 +252,13 @@ final class EnvelopBuilder
             $this->reference ?? '',
             $this->sender ?? '',
             $this->receiver ?? '',
-            json_encode($this->headers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            json_encode($this->body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            Util::jsonEncode($this->headers),
+            Util::jsonEncode($this->body),
         ]);
     }
 
     /**
-     * Private constructor, use ::start()
+     * Private constructor, use ::start().
      */
     private function __construct()
     {

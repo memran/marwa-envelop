@@ -7,7 +7,7 @@ namespace Marwa\Envelop;
 use RuntimeException;
 
 /**
- * Codec class for encoding and decoding Envelop messages with optional compression and HMAC verification.
+ * Encode and decode envelopes with optional compression and signature validation.
  */
 final class Codec
 {
@@ -15,47 +15,44 @@ final class Codec
     public const COMPRESSION_GZIP = 'gzip';
 
     /**
-     * Encode a message into string (optionally gzip compressed)
-     *
-     * @param Envelop $m The message to encode
-     * @param array $opt Options: ['compression' => 'gzip'|'none']
-     * @return string Encoded string
+     * @param array{compression?: string} $opt
      */
-    public static function encode(Envelop $m, array $opt = []): string
+    public static function encode(Envelop $message, array $opt = []): string
     {
-        $c = $opt['compression'] ?? self::COMPRESSION_NONE;
-        $json = $m->toJson();
-        if ($c === self::COMPRESSION_NONE) return $json;
+        $compression = $opt['compression'] ?? self::COMPRESSION_NONE;
+        $json = $message->toJson();
 
-        if ($c === self::COMPRESSION_GZIP) {
+        if ($compression === self::COMPRESSION_NONE) {
+            return $json;
+        }
+
+        if ($compression === self::COMPRESSION_GZIP) {
             $gz = gzencode($json, 6);
-            if ($gz === false) throw new RuntimeException('gzip failed');
+            if ($gz === false) {
+                throw new RuntimeException('gzip failed');
+            }
+
             return base64_encode($gz);
         }
 
-        throw new RuntimeException("Unknown compression: {$c}");
+        throw new RuntimeException(sprintf('Unknown compression: %s', $compression));
     }
 
     /**
-     * Decode a string into Envelop object (optionally decompress and verify signature)
-     *
-     * @param string $wire Encoded message string
-     * @param array $opt Options: ['compression', 'verifyWithSecret', 'signatureRequired']
-     * @return Envelop Decoded message
+     * @param array{
+     *     compression?: string,
+     *     verifyWithSecret?: ?string,
+     *     signatureRequired?: bool
+     * } $opt
      */
     public static function decode(string $wire, array $opt = []): Envelop
     {
-        $c = $opt['compression'] ?? self::COMPRESSION_NONE;
-
-        $json = ($c === self::COMPRESSION_GZIP)
-            ? (function (string $w): string {
-                $raw = base64_decode($w, true);
-                if ($raw === false) throw new RuntimeException('base64 invalid');
-                $out = gzdecode($raw);
-                if ($out === false) throw new RuntimeException('gunzip failed');
-                return $out;
-            })($wire)
-            : $wire;
+        $compression = $opt['compression'] ?? self::COMPRESSION_NONE;
+        $json = match ($compression) {
+            self::COMPRESSION_NONE => $wire,
+            self::COMPRESSION_GZIP => self::decodeGzip($wire),
+            default => throw new RuntimeException(sprintf('Unknown compression: %s', $compression)),
+        };
 
         $msg = Envelop::fromJson($json);
 
@@ -67,5 +64,20 @@ final class Codec
         }
 
         return $msg;
+    }
+
+    private static function decodeGzip(string $wire): string
+    {
+        $raw = base64_decode($wire, true);
+        if ($raw === false) {
+            throw new RuntimeException('base64 invalid');
+        }
+
+        $out = gzdecode($raw);
+        if ($out === false) {
+            throw new RuntimeException('gunzip failed');
+        }
+
+        return $out;
     }
 }

@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Marwa\Envelop;
 
+use JsonException;
+
 /**
- * Utility class with helper functions
+ * Internal utility helpers used across the package.
  */
 final class Util
 {
     /**
-     * Generate a UUID v4
-     *
-     * @return string UUID v4 string
+     * Generate an RFC 4122 version 4 UUID.
      */
     public static function uuidv4(): string
     {
@@ -23,31 +23,28 @@ final class Util
     }
 
     /**
-     * Guess MIME type from file content or extension
-     *
-     * @param string $path File path (for extension)
-     * @param string $bytes File content (optional)
-     * @return string Detected MIME type
+     * Guess a MIME type from file content, falling back to the extension map.
      */
     public static function mime(string $path, string $bytes): string
     {
         if (function_exists('finfo_open')) {
             $fi = new \finfo(\FILEINFO_MIME_TYPE);
             $m  = $fi->buffer($bytes);
-            if (is_string($m) && $m !== '') return $m;
+            if (is_string($m) && $m !== '') {
+                return $m;
+            }
         }
+
         return self::mimeByExt($path);
     }
 
     /**
-     * Fallback MIME detection by file extension
-     *
-     * @param string $path File name
-     * @return string MIME type
+     * Fallback MIME detection by file extension.
      */
     public static function mimeByExt(string $path): string
     {
         $ext = strtolower(pathinfo($path, \PATHINFO_EXTENSION));
+
         return match ($ext) {
             'jpg', 'jpeg' => 'image/jpeg',
             'png'        => 'image/png',
@@ -61,5 +58,20 @@ final class Util
             'zip'        => 'application/zip',
             default      => 'application/octet-stream',
         };
+    }
+
+    /**
+     * @throws \RuntimeException
+     */
+    public static function jsonEncode(mixed $value): string
+    {
+        try {
+            return json_encode(
+                $value,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+        } catch (JsonException $exception) {
+            throw new \RuntimeException('Failed to encode JSON payload.', 0, $exception);
+        }
     }
 }

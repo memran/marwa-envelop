@@ -5,27 +5,16 @@ declare(strict_types=1);
 namespace Marwa\Envelop;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
+use Throwable;
 
 /**
- * Structured message container class (immutable)
+ * Immutable transport-agnostic message envelope.
  */
 final class Envelop
 {
     /**
-     * @param string $id Unique message ID (UUID v4)
-     * @param string $type Message type (e.g. chat.message)
-     * @param string $version Protocol version (default: 1.0)
-     * @param DateTimeImmutable $created Creation timestamp
-     * @param string|null $trace Optional trace ID
-     * @param string|null $reference Optional reference ID
-     * @param string|null $sender Sender ID
-     * @param string|null $receiver Receiver ID
-     * @param array $headers Key-value metadata headers
-     * @param mixed $body Actual message body (text/array/file/link)
-     * @param string|null $content Content type (e.g. application/json)
-     * @param int|null $ttl Time-to-live in seconds (optional)
-     * @param string|null $reply Reply-to message ID (optional)
-     * @param string|null $signature HMAC signature (optional)
+     * @param array<string, string> $headers
      */
     public function __construct(
         public readonly string $id,
@@ -42,10 +31,26 @@ final class Envelop
         public readonly ?int $ttl,
         public readonly ?string $reply,
         public readonly ?string $signature
-    ) {}
+    ) {
+    }
 
     /**
-     * Convert message to array
+     * @return array{
+     *     id: string,
+     *     type: string,
+     *     version: string,
+     *     created: string,
+     *     trace: ?string,
+     *     reference: ?string,
+     *     sender: ?string,
+     *     receiver: ?string,
+     *     headers: array<string, string>,
+     *     body: mixed,
+     *     content: ?string,
+     *     ttl: ?int,
+     *     reply: ?string,
+     *     signature: ?string
+     * }
      */
     public function toArray(): array
     {
@@ -68,71 +73,90 @@ final class Envelop
     }
 
     /**
-     * Create Envelop object from array
+     * @param array<string, mixed> $data
      */
     public static function fromArray(array $data): self
     {
+        $created = self::parseCreated($data['created'] ?? null);
+        $ttl = self::parseTtl($data['ttl'] ?? null);
+
         return new self(
             id: (string)($data['id'] ?? ''),
             type: (string)($data['type'] ?? ''),
             version: (string)($data['version'] ?? '1.0'),
-            created: new DateTimeImmutable((string)($data['created'] ?? date(DATE_ATOM))),
-            trace: $data['trace'] ?? null,
-            reference: $data['reference'] ?? null,
-            sender: $data['sender'] ?? null,
-            receiver: $data['receiver'] ?? null,
-            headers: is_array($data['headers'] ?? null) ? $data['headers'] : [],
+            created: $created,
+            trace: self::nullableString($data['trace'] ?? null),
+            reference: self::nullableString($data['reference'] ?? null),
+            sender: self::nullableString($data['sender'] ?? null),
+            receiver: self::nullableString($data['receiver'] ?? null),
+            headers: self::normalizeHeaders($data['headers'] ?? []),
             body: $data['body'] ?? null,
-            content: $data['content'] ?? null,
-            ttl: isset($data['ttl']) ? (int)$data['ttl'] : null,
-            reply: $data['reply'] ?? null,
-            signature: $data['signature'] ?? null,
+            content: self::nullableString($data['content'] ?? null),
+            ttl: $ttl,
+            reply: self::nullableString($data['reply'] ?? null),
+            signature: self::nullableString($data['signature'] ?? null),
         );
     }
 
     /**
-     * Convert message to JSON
+     * @throws \RuntimeException
      */
     public function toJson(): string
     {
-        return json_encode($this->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return Util::jsonEncode($this->toArray());
     }
 
     /**
-     * Create message from JSON string
+     * @throws InvalidArgumentException
      */
     public static function fromJson(string $json): self
     {
-        $arr = json_decode($json, true);
-        if (!is_array($arr)) {
-            throw new \InvalidArgumentException("Invalid JSON for Envelop");
+        try {
+            /** @var mixed $decoded */
+            $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new InvalidArgumentException('Invalid JSON for Envelop.', 0, $exception);
         }
-        return self::fromArray($arr);
+
+        if (!is_array($decoded)) {
+            throw new InvalidArgumentException('Invalid JSON for Envelop.');
+        }
+
+        return self::fromArray($decoded);
     }
 
     /**
-     * Check if message is expired based on TTL
+     * Check whether the TTL window has elapsed.
      */
     public function isExpired(): bool
     {
-        if ($this->ttl === null) return false;
+        if ($this->ttl === null) {
+            return false;
+        }
+
         $expiresAt = $this->created->getTimestamp() + $this->ttl;
+
         return time() > $expiresAt;
     }
 
     /**
-     * Validate HMAC signature using shared secret
+     * Validate the message HMAC signature using a shared secret.
      */
     public function checkSignature(string $secret): bool
     {
-        if (empty($this->signature)) return false;
-        $data = $this->signaturePayload();
-        $calc = hash_hmac('sha256', $data, $secret);
+        if ($this->signature === null || $this->signature === '') {
+            return false;
+        }
+
+        $calc = hash_hmac('sha256', $this->signaturePayload(), $secret);
+
         return hash_equals($calc, $this->signature);
     }
 
     /**
-     * Return the string payload used to compute signature
+     * Return the canonical payload used to compute the HMAC signature.
+     *
+     * @throws \RuntimeException
      */
     public function signaturePayload(): string
     {
@@ -145,8 +169,79 @@ final class Envelop
             $this->reference ?? '',
             $this->sender ?? '',
             $this->receiver ?? '',
-            json_encode($this->headers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            json_encode($this->body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            Util::jsonEncode($this->headers),
+            Util::jsonEncode($this->body),
         ]);
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private static function parseCreated(mixed $value): DateTimeImmutable
+    {
+        if ($value === null || $value === '') {
+            return new DateTimeImmutable();
+        }
+
+        try {
+            return new DateTimeImmutable((string) $value);
+        } catch (Throwable $exception) {
+            throw new InvalidArgumentException('Invalid created timestamp.', 0, $exception);
+        }
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private static function parseTtl(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!is_int($value) && !is_string($value)) {
+            throw new InvalidArgumentException('TTL must be an integer number of seconds.');
+        }
+
+        if (filter_var($value, FILTER_VALIDATE_INT) === false) {
+            throw new InvalidArgumentException('TTL must be an integer number of seconds.');
+        }
+
+        $ttl = (int) $value;
+        if ($ttl < 0) {
+            throw new InvalidArgumentException('TTL cannot be negative.');
+        }
+
+        return $ttl;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private static function nullableString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * @param mixed $headers
+     * @return array<string, string>
+     */
+    private static function normalizeHeaders(mixed $headers): array
+    {
+        if (!is_array($headers)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($headers as $key => $value) {
+            $normalized[(string) $key] = (string) $value;
+        }
+
+        return $normalized;
     }
 }
