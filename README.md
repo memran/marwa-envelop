@@ -1,160 +1,154 @@
 # Marwa Envelop
 
+Transport-agnostic message envelopes for PHP applications that need a small, framework-free payload format for Kafka, WebSocket, MQTT, queues, or internal event pipelines.
+
+[![CI](https://github.com/memran/marwa-envelop/actions/workflows/ci.yml/badge.svg)](https://github.com/memran/marwa-envelop/actions/workflows/ci.yml)
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/memran/marwa-envelop.svg)](https://packagist.org/packages/memran/marwa-envelop)
-[![Downloads](https://img.shields.io/packagist/dt/memran/marwa-envelop.svg)](https://packagist.org/packages/memran/marwa-envelop)
 [![License](https://img.shields.io/github/license/memran/marwa-envelop.svg)](LICENSE)
 
-**Transport-agnostic, structured message wrapper** for PHP — ideal for Kafka, WebSocket, MQTT, log pipelines, or chat protocols.
+## Requirements
 
----
+- PHP 8.1 or newer
+- Composer for dependency management
 
-## 🚀 Features
-
-- 📦 PSR-compliant and lazy-loaded
-- 💬 Works with strings, arrays, files, and links
-- 🔐 Optional HMAC signing with TTL expiry
-- 🔁 Compress/gzip for efficient transport
-- 🔗 Attachments and file linking
-- 🧱 Chainable message builder syntax
-- 🧪 Ready for WebSocket, Kafka, SQS, Laravel Queue, MQTT, etc.
-
----
-
-## 📸 Screenshot
-
-> Message structure as decoded from Envelop JSON:
-
-```
-{
-  "id": "2dd0faca-499a-42de-a274-a458b12dc1cf",
-  "type": "chat.message",
-  "sender": "user:123",
-  "receiver": "user:456",
-  "body": "Hello World!",
-  "headers": {
-    "x-room": "demo"
-  },
-  "signature": "..."
-}
-```
-
----
-
-## 📦 Installation
+## Installation
 
 ```bash
 composer require memran/marwa-envelop
 ```
 
----
-
-## 🛠 Usage Example
-
-### ✉️ Build and Send Message
+## Quick Start
 
 ```php
+<?php
+
+use Marwa\Envelop\Codec;
+use Marwa\Envelop\Envelop;
 use Marwa\Envelop\EnvelopBuilder;
 
-$msg = EnvelopBuilder::start()
+$message = EnvelopBuilder::start()
     ->type('chat.message')
     ->sender('user:123')
     ->receiver('user:456')
-    ->header('x-room', 'demo')
-    ->body('Hello world!')
+    ->header('x-room', 'support')
+    ->body(['text' => 'Hello world'])
     ->ttl(60)
-    ->sign('super-secret-key')
+    ->sign('shared-secret')
     ->build();
 
-// Send over Kafka, WebSocket, etc.
-$wire = $msg->toJson();
+$wire = Codec::encode($message, ['compression' => Codec::COMPRESSION_GZIP]);
+$decoded = Codec::decode($wire, [
+    'compression' => Codec::COMPRESSION_GZIP,
+    'verifyWithSecret' => 'shared-secret',
+    'signatureRequired' => true,
+]);
+
+assert($decoded instanceof Envelop);
 ```
 
----
+## Core Concepts
 
-### 📬 Decode and Read Message
+- `Envelop`: immutable message value object
+- `EnvelopBuilder`: fluent API for constructing messages safely
+- `Codec`: encoding, gzip compression, and optional signature verification
+- `Util`: internal helpers for UUID and MIME detection
+
+## Usage Examples
+
+### Plain text or JSON payloads
 
 ```php
-use Marwa\Envelop\Envelop;
-
-$received = Envelop::fromJson($wire);
-
-if ($received->isExpired()) {
-    throw new \Exception("Message expired");
-}
-
-if (!$received->checkSignature('super-secret-key')) {
-    throw new \Exception("Invalid signature");
-}
-
-echo $received->body; // "Hello world!"
+$message = EnvelopBuilder::start()
+    ->type('chat.message')
+    ->body('Hello')
+    ->build();
 ```
 
----
+```php
+$message = EnvelopBuilder::start()
+    ->type('job.created')
+    ->body(['id' => 42, 'priority' => 'high'])
+    ->build();
+```
 
-### 📁 Attach File
+### File attachments
 
 ```php
-$msg = EnvelopBuilder::start()
+$message = EnvelopBuilder::start()
     ->type('chat.file')
-    ->sender('u:1')
-    ->receiver('u:2')
-    ->attach('/path/to/image.jpg')
+    ->attach('/absolute/path/to/invoice.pdf')
     ->build();
 ```
 
----
+Attachments are base64 encoded and include the original filename in the `x-filename` header.
 
-### 🔗 Link to Remote File
+### Remote file links
 
 ```php
-$msg = EnvelopBuilder::start()
+$message = EnvelopBuilder::start()
     ->type('file.link')
-    ->sender('u:1')
-    ->receiver('u:2')
-    ->link('https://example.com/my.pdf', [
-        'name' => 'My Document',
-        'size' => '2MB'
+    ->link('https://example.com/report.pdf', [
+        'name' => 'Quarterly Report',
+        'size' => '2MB',
     ])
     ->build();
 ```
 
----
+## Validation and Safe Defaults
 
-## 🧩 Ideal Use Cases
+- `type()` is required before `build()`
+- negative TTL values are rejected
+- malformed JSON and invalid timestamps throw `InvalidArgumentException`
+- unreadable files passed to `attach()` throw `RuntimeException`
+- signatures are only considered valid when the payload matches exactly
 
-- WhatsApp-style chat systems
-- Kafka or MQTT message brokers
-- WebSocket messaging with TTL
-- Distributed logging pipelines
-- Task queues with metadata (e.g. Laravel, Symfony)
+This package does not sanitize or authorize application data for you. Treat decoded payloads, file paths, and shared secrets as untrusted inputs at the application boundary.
 
----
+## Project Structure
 
-## 🔖 Stable Releases
+```text
+src/
+  Codec.php
+  Envelop.php
+  EnvelopBuilder.php
+  Util.php
+tests/
+.github/workflows/ci.yml
+```
 
-| Version  | Notes                     |
-| -------- | ------------------------- |
-| `v1.0.0` | Initial stable release 🚀 |
+## Development
 
----
+Install dependencies:
 
-## 📝 License
+```bash
+composer install
+```
 
-MIT © [Mohammad Emran](https://github.com/memran)
+Common commands:
 
----
+```bash
+composer test
+composer test:coverage
+composer analyse
+composer lint
+composer fix
+composer ci
+```
 
-## 🧠 Keywords
+## Testing and Static Analysis
 
-- kafka
-- websocket
-- envelope
-- message structure
-- event-driven
-- php builder
-- logging
-- transport agnostic
-- HMAC
-- json message
-- file attachment
-- laravel queue
+- PHPUnit 10 covers serialization, signatures, TTL expiry, compression, and invalid-input regressions
+- PHPStan checks `src/` and `tests/`
+- php-cs-fixer enforces PSR-12-oriented formatting
+
+## CI and Releases
+
+GitHub Actions runs linting, static analysis, and tests on pushes and pull requests. Tag releases after `composer ci` passes and the README reflects any public API changes.
+
+## Contributing
+
+See [AGENTS.md](AGENTS.md) for repository workflow, coding expectations, and pull request guidance.
+
+## License
+
+MIT
