@@ -1,10 +1,25 @@
 # Marwa Envelop
 
-Transport-agnostic message envelopes for PHP applications that need a small, framework-free payload format for Kafka, WebSocket, MQTT, queues, or internal event pipelines.
+Small, framework-agnostic message envelopes for PHP applications that need a consistent payload format across Kafka, WebSocket, MQTT, queues, and internal event pipelines.
 
 [![CI](https://github.com/memran/marwa-envelop/actions/workflows/ci.yml/badge.svg)](https://github.com/memran/marwa-envelop/actions/workflows/ci.yml)
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/memran/marwa-envelop.svg)](https://packagist.org/packages/memran/marwa-envelop)
+[![PHP Version](https://img.shields.io/packagist/dependency-v/memran/marwa-envelop/php)](https://packagist.org/packages/memran/marwa-envelop)
+[![Packagist Downloads](https://img.shields.io/packagist/dt/memran/marwa-envelop.svg)](https://packagist.org/packages/memran/marwa-envelop)
 [![License](https://img.shields.io/github/license/memran/marwa-envelop.svg)](LICENSE)
+
+Marwa Envelop gives you an immutable envelope object, a fluent builder, and a codec for safe serialization, compression, and signature verification. It is designed for libraries and services that want predictable message structure without framework lock-in.
+
+## Features
+
+- Immutable message envelopes with a fluent builder API
+- JSON serialization with explicit error handling
+- Optional HMAC signing and signature verification
+- Optional gzip transport encoding
+- Built-in payload size limits for wire and decoded content
+- File attachments and validated `http`/`https` resource links
+- Lightweight metadata validation for message types and identifiers
+- PHPUnit, PHPStan, php-cs-fixer, and GitHub Actions included
 
 ## Requirements
 
