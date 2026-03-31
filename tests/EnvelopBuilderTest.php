@@ -112,4 +112,20 @@ final class EnvelopBuilderTest extends TestCase
         self::assertSame('Report', $message->headers['x-name']);
         self::assertSame('2MB', $message->headers['x-size']);
     }
+
+    public function testLinkRejectsInvalidUrls(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Linked resource URL must use http or https.');
+
+        EnvelopBuilder::start()->link('ftp://example.com/report.pdf');
+    }
+
+    public function testLinkRejectsMalformedUrls(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Linked resource URL must be a valid absolute URL.');
+
+        EnvelopBuilder::start()->link('/relative/path/report.pdf');
+    }
 }

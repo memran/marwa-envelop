@@ -170,11 +170,7 @@ final class EnvelopBuilder
      */
     public function link(string $url, array $meta = []): self
     {
-        if ($url === '') {
-            throw new InvalidArgumentException('Linked resource URL cannot be empty.');
-        }
-
-        $this->body = $url;
+        $this->body = ValueValidator::resourceUrl($url);
         $this->content = 'application/x.file.link';
         foreach ($meta as $k => $v) {
             $this->header('x-' . strtolower((string) $k), (string) $v);

@@ -46,6 +46,16 @@ $decoded = Codec::decode($wire, [
 assert($decoded instanceof Envelop);
 ```
 
+For untrusted senders, keep or tighten the built-in size limits:
+
+```php
+$decoded = Codec::decode($wire, [
+    'compression' => Codec::COMPRESSION_GZIP,
+    'maxWireBytes' => 512 * 1024,
+    'maxDecodedBytes' => 2 * 1024 * 1024,
+]);
+```
+
 ## Core Concepts
 
 - `Envelop`: immutable message value object
@@ -94,6 +104,8 @@ $message = EnvelopBuilder::start()
     ->build();
 ```
 
+Linked resource URLs must be absolute `http` or `https` URLs.
+
 ## Validation and Safe Defaults
 
 - `type()` is required before `build()`
@@ -102,6 +114,7 @@ $message = EnvelopBuilder::start()
 - negative TTL values are rejected
 - malformed JSON and invalid timestamps throw `InvalidArgumentException`
 - unreadable files passed to `attach()` throw `RuntimeException`
+- `Codec` enforces default wire and decoded payload size limits
 - signatures are only considered valid when the payload matches exactly
 
 This package does not sanitize or authorize application data for you. Treat decoded payloads, file paths, and shared secrets as untrusted inputs at the application boundary.

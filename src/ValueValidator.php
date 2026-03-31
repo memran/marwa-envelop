@@ -11,6 +11,8 @@ use InvalidArgumentException;
  */
 final class ValueValidator
 {
+    private const MAX_IDENTIFIER_LENGTH = 255;
+
     /**
      * Validate the envelope message type.
      */
@@ -28,6 +30,41 @@ final class ValueValidator
         }
 
         return $type;
+    }
+
+    /**
+     * Validate a linked resource URL.
+     */
+    public static function resourceUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            throw new InvalidArgumentException('Linked resource URL cannot be empty.');
+        }
+
+        if (strlen($url) > 2048) {
+            throw new InvalidArgumentException('Linked resource URL cannot be longer than 2048 characters.');
+        }
+
+        if (preg_match('/[\x00-\x1F\x7F]/', $url) === 1) {
+            throw new InvalidArgumentException('Linked resource URL cannot contain control characters.');
+        }
+
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            throw new InvalidArgumentException('Linked resource URL must be a valid absolute URL.');
+        }
+
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        if (!is_string($scheme) || !in_array(strtolower($scheme), ['http', 'https'], true)) {
+            throw new InvalidArgumentException('Linked resource URL must use http or https.');
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            throw new InvalidArgumentException('Linked resource URL must include a host.');
+        }
+
+        return $url;
     }
 
     /**
@@ -63,7 +100,7 @@ final class ValueValidator
     private static function normalizeIdentifier(string $value, string $field): string
     {
         $value = trim($value);
-        if (strlen($value) > 255) {
+        if (strlen($value) > self::MAX_IDENTIFIER_LENGTH) {
             throw new InvalidArgumentException(sprintf('%s cannot be longer than 255 characters.', ucfirst($field)));
         }
 

@@ -77,4 +77,48 @@ final class CodecTest extends TestCase
             'signatureRequired' => true,
         ]);
     }
+
+    public function testItRejectsWirePayloadsThatExceedTheLimit(): void
+    {
+        $message = EnvelopBuilder::start()
+            ->type('chat.message')
+            ->body(str_repeat('a', 256))
+            ->build();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Wire payload exceeds 32 bytes.');
+
+        Codec::encode($message, ['maxWireBytes' => 32]);
+    }
+
+    public function testItRejectsDecodedPayloadsThatExceedTheLimit(): void
+    {
+        $message = EnvelopBuilder::start()
+            ->type('chat.message')
+            ->body(str_repeat('a', 256))
+            ->build();
+
+        $wire = Codec::encode($message, ['compression' => Codec::COMPRESSION_GZIP]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Decoded payload exceeds 32 bytes.');
+
+        Codec::decode($wire, [
+            'compression' => Codec::COMPRESSION_GZIP,
+            'maxDecodedBytes' => 32,
+        ]);
+    }
+
+    public function testItRejectsInvalidByteLimits(): void
+    {
+        $message = EnvelopBuilder::start()
+            ->type('chat.message')
+            ->body('hello')
+            ->build();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Wire payload limit must be greater than zero.');
+
+        Codec::encode($message, ['maxWireBytes' => 0]);
+    }
 }
