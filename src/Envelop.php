@@ -13,25 +13,59 @@ use Throwable;
  */
 final class Envelop
 {
+    public readonly string $id;
+    public readonly string $type;
+    public readonly string $version;
+    public readonly DateTimeImmutable $created;
+    public readonly ?string $trace;
+    public readonly ?string $reference;
+    public readonly ?string $sender;
+    public readonly ?string $receiver;
+
+    /**
+     * @var array<string, string>
+     */
+    public readonly array $headers;
+
+    public readonly mixed $body;
+    public readonly ?string $content;
+    public readonly ?int $ttl;
+    public readonly ?string $reply;
+    public readonly ?string $signature;
+
     /**
      * @param array<string, string> $headers
      */
     public function __construct(
-        public readonly string $id,
-        public readonly string $type,
-        public readonly string $version,
-        public readonly DateTimeImmutable $created,
-        public readonly ?string $trace,
-        public readonly ?string $reference,
-        public readonly ?string $sender,
-        public readonly ?string $receiver,
-        public readonly array $headers,
-        public readonly mixed $body,
-        public readonly ?string $content,
-        public readonly ?int $ttl,
-        public readonly ?string $reply,
-        public readonly ?string $signature
+        string $id,
+        string $type,
+        string $version,
+        DateTimeImmutable $created,
+        ?string $trace,
+        ?string $reference,
+        ?string $sender,
+        ?string $receiver,
+        array $headers,
+        mixed $body,
+        ?string $content,
+        ?int $ttl,
+        ?string $reply,
+        ?string $signature
     ) {
+        $this->id = ValueValidator::requiredIdentifier($id, 'id');
+        $this->type = ValueValidator::messageType($type);
+        $this->version = $version;
+        $this->created = $created;
+        $this->trace = ValueValidator::optionalIdentifier($trace, 'trace');
+        $this->reference = ValueValidator::optionalIdentifier($reference, 'reference');
+        $this->sender = ValueValidator::optionalIdentifier($sender, 'sender');
+        $this->receiver = ValueValidator::optionalIdentifier($receiver, 'receiver');
+        $this->headers = $headers;
+        $this->body = $body;
+        $this->content = $content;
+        $this->ttl = $ttl;
+        $this->reply = ValueValidator::optionalIdentifier($reply, 'reply');
+        $this->signature = $signature;
     }
 
     /**
@@ -81,20 +115,20 @@ final class Envelop
         $ttl = self::parseTtl($data['ttl'] ?? null);
 
         return new self(
-            id: (string)($data['id'] ?? ''),
-            type: (string)($data['type'] ?? ''),
+            id: self::requiredString($data['id'] ?? null, 'id'),
+            type: self::requiredString($data['type'] ?? null, 'type'),
             version: (string)($data['version'] ?? '1.0'),
             created: $created,
-            trace: self::nullableString($data['trace'] ?? null),
-            reference: self::nullableString($data['reference'] ?? null),
-            sender: self::nullableString($data['sender'] ?? null),
-            receiver: self::nullableString($data['receiver'] ?? null),
+            trace: self::nullableString($data['trace'] ?? null, 'trace'),
+            reference: self::nullableString($data['reference'] ?? null, 'reference'),
+            sender: self::nullableString($data['sender'] ?? null, 'sender'),
+            receiver: self::nullableString($data['receiver'] ?? null, 'receiver'),
             headers: self::normalizeHeaders($data['headers'] ?? []),
             body: $data['body'] ?? null,
-            content: self::nullableString($data['content'] ?? null),
+            content: self::nullableString($data['content'] ?? null, 'content'),
             ttl: $ttl,
-            reply: self::nullableString($data['reply'] ?? null),
-            signature: self::nullableString($data['signature'] ?? null),
+            reply: self::nullableString($data['reply'] ?? null, 'reply'),
+            signature: self::nullableString($data['signature'] ?? null, 'signature'),
         );
     }
 
@@ -218,13 +252,30 @@ final class Envelop
     /**
      * @param mixed $value
      */
-    private static function nullableString(mixed $value): ?string
+    private static function requiredString(mixed $value, string $field): string
+    {
+        if ($value === null) {
+            throw new InvalidArgumentException(sprintf('%s cannot be empty.', ucfirst($field)));
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private static function nullableString(mixed $value, string $field): ?string
     {
         if ($value === null) {
             return null;
         }
 
-        return (string) $value;
+        $string = (string) $value;
+
+        return match ($field) {
+            'trace', 'reference', 'sender', 'receiver', 'reply' => ValueValidator::optionalIdentifier($string, $field),
+            default => $string,
+        };
     }
 
     /**

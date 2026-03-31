@@ -8,7 +8,7 @@ Transport-agnostic message envelopes for PHP applications that need a small, fra
 
 ## Requirements
 
-- PHP 8.1 or newer
+- PHP 8.2 or newer
 - Composer for dependency management
 
 ## Installation
@@ -97,6 +97,8 @@ $message = EnvelopBuilder::start()
 ## Validation and Safe Defaults
 
 - `type()` is required before `build()`
+- message types must use letters, numbers, dots, underscores, or hyphens
+- required IDs must be non-empty; optional IDs reject blank or control-character values
 - negative TTL values are rejected
 - malformed JSON and invalid timestamps throw `InvalidArgumentException`
 - unreadable files passed to `attach()` throw `RuntimeException`
@@ -138,7 +140,7 @@ composer ci
 ## Testing and Static Analysis
 
 - PHPUnit 10 covers serialization, signatures, TTL expiry, compression, and invalid-input regressions
-- PHPStan checks `src/` and `tests/`
+- PHPStan 2 checks `src/` and `tests/`
 - php-cs-fixer enforces PSR-12-oriented formatting
 
 ## CI and Releases

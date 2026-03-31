@@ -69,6 +69,42 @@ final class EnvelopTest extends TestCase
         ]);
     }
 
+    public function testItRejectsInvalidMessageTypes(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Message type may only contain letters, numbers, dots, underscores, and hyphens.'
+        );
+
+        Envelop::fromArray([
+            'id' => 'msg-1',
+            'type' => 'chat message',
+        ]);
+    }
+
+    public function testItRejectsEmptyIdentifiers(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Id cannot be empty.');
+
+        Envelop::fromArray([
+            'id' => '   ',
+            'type' => 'chat.message',
+        ]);
+    }
+
+    public function testItRejectsControlCharactersInOptionalIdentifiers(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Sender cannot contain control characters.');
+
+        Envelop::fromArray([
+            'id' => 'msg-1',
+            'type' => 'chat.message',
+            'sender' => "user:\n1",
+        ]);
+    }
+
     public function testItDetectsExpiration(): void
     {
         $expired = new Envelop(

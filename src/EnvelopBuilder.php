@@ -27,7 +27,7 @@ final class EnvelopBuilder
     private array $headers = [];
 
     private mixed $body = null;
-    private ?string $content = 'application/json';
+    private string $content = 'application/json';
     private ?int $ttl = null;
     private ?string $reply = null;
     private ?string $signature = null;
@@ -46,11 +46,7 @@ final class EnvelopBuilder
      */
     public function type(string $type): self
     {
-        if ($type === '') {
-            throw new InvalidArgumentException('Message type cannot be empty.');
-        }
-
-        $this->type = $type;
+        $this->type = ValueValidator::messageType($type);
 
         return $this;
     }
@@ -60,7 +56,7 @@ final class EnvelopBuilder
      */
     public function sender(string $id): self
     {
-        $this->sender = $id;
+        $this->sender = ValueValidator::optionalIdentifier($id, 'sender');
 
         return $this;
     }
@@ -70,7 +66,7 @@ final class EnvelopBuilder
      */
     public function receiver(string $id): self
     {
-        $this->receiver = $id;
+        $this->receiver = ValueValidator::optionalIdentifier($id, 'receiver');
 
         return $this;
     }
@@ -80,7 +76,7 @@ final class EnvelopBuilder
      */
     public function reference(string $id): self
     {
-        $this->reference = $id;
+        $this->reference = ValueValidator::optionalIdentifier($id, 'reference');
 
         return $this;
     }
@@ -90,7 +86,7 @@ final class EnvelopBuilder
      */
     public function trace(string $id): self
     {
-        $this->trace = $id;
+        $this->trace = ValueValidator::optionalIdentifier($id, 'trace');
 
         return $this;
     }
@@ -100,7 +96,7 @@ final class EnvelopBuilder
      */
     public function reply(string $id): self
     {
-        $this->reply = $id;
+        $this->reply = ValueValidator::optionalIdentifier($id, 'reply');
 
         return $this;
     }

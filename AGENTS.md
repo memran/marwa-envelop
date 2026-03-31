@@ -20,7 +20,7 @@ Use Composer for local development:
 There is no build step or framework bootstrap in this package. Use the examples in `README.md` for quick manual validation.
 
 ## Coding Style & Naming Conventions
-Target PHP `>=8.1` as defined in `composer.json`. Follow the existing style in `src/`:
+Target PHP `^8.2` as defined in `composer.json`. Follow the existing style in `src/`:
 
 - `declare(strict_types=1);` at the top of each PHP file
 - 4-space indentation, braces on the next line for classes and methods

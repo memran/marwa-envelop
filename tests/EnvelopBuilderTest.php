@@ -44,6 +44,24 @@ final class EnvelopBuilderTest extends TestCase
         EnvelopBuilder::start()->header('', 'value');
     }
 
+    public function testTypeRejectsInvalidCharacters(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Message type may only contain letters, numbers, dots, underscores, and hyphens.'
+        );
+
+        EnvelopBuilder::start()->type('chat message');
+    }
+
+    public function testSenderRejectsBlankValues(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Sender cannot be empty when provided.');
+
+        EnvelopBuilder::start()->sender('   ');
+    }
+
     public function testTtlCannotBeNegative(): void
     {
         $this->expectException(InvalidArgumentException::class);
